@@ -87,7 +87,7 @@ a:hover {
 }
 
 .logo img {
-    max-height: 70px;
+    max-height: 120px;
     width: auto;
 }
 
@@ -266,9 +266,6 @@ a:hover {
 
 .footer-logo img {
     max-width: 200px;
-    background-color: var(--white); /* White background for contrast */
-    padding: 10px;
-    border-radius: 4px;
 }
 
 .site-footer h3 {

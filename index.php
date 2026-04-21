@@ -1,11 +1,76 @@
 <?php get_header(); ?>
 <main class="site-main">
     <?php
-    $home_photo = get_theme_mod('suc_home_photo_link');
-    if ( $home_photo ) : ?>
-        <div class="home-featured-image" style="width: 100%; max-height: 500px; overflow: hidden;">
-            <img src="<?php echo esc_url($home_photo); ?>" alt="Premium Cabinetry" style="width: 100%; height: auto; object-fit: cover;">
+    $photos = array_filter(array(
+        get_theme_mod('suc_home_photo_link'),
+        get_theme_mod('suc_home_photo_link_2'),
+        get_theme_mod('suc_home_photo_link_3')
+    ));
+    if ( !empty($photos) ) :
+        $photos = array_values($photos); // reindex
+    ?>
+        <div class="home-carousel" style="position: relative; width: 100%; height: 500px; overflow: hidden; background: #000;">
+            <?php foreach($photos as $index => $photo) : ?>
+                <div class="carousel-slide" style="position: absolute; top:0; left:0; width:100%; height:100%; opacity: <?php echo $index === 0 ? '1' : '0'; ?>; transition: opacity 0.5s ease-in-out; z-index: <?php echo $index === 0 ? '1' : '0'; ?>;">
+                    <img src="<?php echo esc_url($photo); ?>" alt="Premium Cabinetry" style="width: 100%; height: 100%; object-fit: cover;">
+                </div>
+            <?php endforeach; ?>
+
+            <?php if (count($photos) > 1) : ?>
+                <button class="carousel-btn prev" style="position: absolute; top: 50%; left: 20px; transform: translateY(-50%); z-index: 10; background: rgba(0,0,0,0.5); color: white; border: none; padding: 10px 15px; cursor: pointer; font-size: 1.5rem;">&#10094;</button>
+                <button class="carousel-btn next" style="position: absolute; top: 50%; right: 20px; transform: translateY(-50%); z-index: 10; background: rgba(0,0,0,0.5); color: white; border: none; padding: 10px 15px; cursor: pointer; font-size: 1.5rem;">&#10095;</button>
+            <?php endif; ?>
         </div>
+        <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const slides = document.querySelectorAll('.carousel-slide');
+            if (slides.length <= 1) return;
+
+            let currentSlide = 0;
+            const nextBtn = document.querySelector('.carousel-btn.next');
+            const prevBtn = document.querySelector('.carousel-btn.prev');
+            let slideInterval;
+
+            function showSlide(index) {
+                slides.forEach(slide => {
+                    slide.style.opacity = '0';
+                    slide.style.zIndex = '0';
+                });
+                slides[index].style.opacity = '1';
+                slides[index].style.zIndex = '1';
+            }
+
+            function nextSlide() {
+                currentSlide = (currentSlide + 1) % slides.length;
+                showSlide(currentSlide);
+            }
+
+            function prevSlide() {
+                currentSlide = (currentSlide - 1 + slides.length) % slides.length;
+                showSlide(currentSlide);
+            }
+
+            if(nextBtn) nextBtn.addEventListener('click', function() {
+                nextSlide();
+                resetInterval();
+            });
+            if(prevBtn) prevBtn.addEventListener('click', function() {
+                prevSlide();
+                resetInterval();
+            });
+
+            function startInterval() {
+                slideInterval = setInterval(nextSlide, 5000);
+            }
+
+            function resetInterval() {
+                clearInterval(slideInterval);
+                startInterval();
+            }
+
+            startInterval();
+        });
+        </script>
     <?php else : ?>
         <div class="home-featured-image placeholder" style="width: 100%; height: 300px; background-color: #e0e0e0; display: flex; align-items: center; justify-content: center; color: #777;">
             <span>[Home Page Photo Placeholder - Set in Customizer]</span>
