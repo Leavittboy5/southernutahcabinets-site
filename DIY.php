@@ -3,6 +3,18 @@
 get_header();
 ?>
 <main class="site-main container">
+    <?php
+    $diy_photo = get_theme_mod('suc_diy_photo_link');
+    if ( $diy_photo ) : ?>
+        <div class="diy-featured-image" style="margin-bottom: 30px;">
+            <img src="<?php echo esc_url($diy_photo); ?>" alt="DIY Cabinetry" style="width: 100%; height: auto; border-radius: 8px;">
+        </div>
+    <?php else : ?>
+        <div class="diy-featured-image placeholder" style="margin-bottom: 30px; width: 100%; height: 250px; background-color: #e0e0e0; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #777;">
+            <span>[DIY Page Photo Placeholder - Set in Customizer]</span>
+        </div>
+    <?php endif; ?>
+
     <h1>DIY Cabinetry Solutions</h1>
     <p>Take charge of your remodel with our Ready-To-Assemble (RTA) and fully assembled cabinet options. Perfect for the handy homeowner or independent contractor who wants premium quality without the custom-cabinet price tag.</p>
     
