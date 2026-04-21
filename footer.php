@@ -1,8 +1,8 @@
 <footer class="site-footer">
         <div class="container footer-container">
             <div class="footer-logo">
-                <!-- Logo with white background for footer contrast if needed -->
-                <img src="<?php echo esc_url( home_url( '/wp-content/uploads/2026/04/SUC-logo.png' ) ); ?>" alt="Southern Utah Cabinetry Logo">
+                <!-- Transparent Logo -->
+                <img src="<?php echo esc_url( home_url( '/wp-content/uploads/2026/04/SUC-logo-transparent.png' ) ); ?>" alt="Southern Utah Cabinetry Logo">
             </div>
             <div class="footer-contact">
                 <h3>Contact Us</h3>
