@@ -73,6 +73,26 @@ function suc_customizer_settings($wp_customize) {
         'type'    => 'url',
     ));
 
+    $wp_customize->add_setting('suc_home_photo_link_2', array(
+        'default'           => '',
+        'sanitize_callback' => 'esc_url_raw',
+    ));
+    $wp_customize->add_control('suc_home_photo_link_2', array(
+        'label'   => 'Home Page Photo Link 2',
+        'section' => 'suc_photos_content',
+        'type'    => 'url',
+    ));
+
+    $wp_customize->add_setting('suc_home_photo_link_3', array(
+        'default'           => '',
+        'sanitize_callback' => 'esc_url_raw',
+    ));
+    $wp_customize->add_control('suc_home_photo_link_3', array(
+        'label'   => 'Home Page Photo Link 3',
+        'section' => 'suc_photos_content',
+        'type'    => 'url',
+    ));
+
     // DIY Page Photo Link
     $wp_customize->add_setting('suc_diy_photo_link', array(
         'default'           => '',
@@ -156,4 +176,11 @@ function suc_register_photo_gallery_cpt() {
     register_post_type('photo_gallery', $args);
 }
 add_action('init', 'suc_register_photo_gallery_cpt', 0);
+
+// Flush rewrite rules on theme activation
+function suc_flush_rewrite_rules_on_activation() {
+    suc_register_photo_gallery_cpt();
+    flush_rewrite_rules();
+}
+add_action('after_switch_theme', 'suc_flush_rewrite_rules_on_activation');
 ?>
