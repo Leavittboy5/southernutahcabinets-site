@@ -3,7 +3,7 @@
 get_header();
 ?>
 <main class="site-main container">
-    <?php
+    <?php 
     $order_photo = get_theme_mod('suc_order_photo_link');
     if ( $order_photo ) : ?>
         <div class="order-featured-image" style="margin-bottom: 30px;">
@@ -21,14 +21,14 @@ get_header();
     <?php
     $form_submitted = false;
     $form_error = false;
-
+    
     if ( $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_order']) ) {
         // Sanitize input
         $cabinet_color = sanitize_text_field($_POST['cabinet_color']);
         $assembly_type = sanitize_text_field($_POST['assembly_type']);
         $installation = sanitize_text_field($_POST['installation']);
         $order_details = sanitize_textarea_field($_POST['order_details']);
-
+        
         // Prepare Email
         $to = get_theme_mod('suc_email', get_option('admin_email'));
         $subject = 'New Cabinet Order Request';
@@ -37,9 +37,9 @@ get_header();
         $body .= "Assembly Preference: " . $assembly_type . "\n";
         $body .= "Installation Preference: " . $installation . "\n";
         $body .= "Order Details:\n" . $order_details . "\n";
-
+        
         $headers = array('Content-Type: text/plain; charset=UTF-8');
-
+        
         // Send Email
         if ( wp_mail($to, $subject, $body, $headers) ) {
             $form_submitted = true;

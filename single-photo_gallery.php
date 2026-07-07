@@ -13,7 +13,7 @@ get_header();
             <?php
             while ( have_posts() ) :
                 the_post();
-
+                
                 // Display the featured image at the top if it exists
                 if ( has_post_thumbnail() ) {
                     echo '<div class="gallery-featured-image" style="margin-bottom: 20px;">';

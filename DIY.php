@@ -3,7 +3,7 @@
 get_header();
 ?>
 <main class="site-main container">
-    <?php
+    <?php 
     $diy_photo = get_theme_mod('suc_diy_photo_link');
     if ( $diy_photo ) : ?>
         <div class="diy-featured-image" style="margin-bottom: 30px;">

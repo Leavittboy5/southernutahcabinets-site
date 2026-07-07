@@ -1,13 +1,13 @@
 <?php get_header(); ?>
 <main class="site-main">
-    <?php
+    <?php 
     $home_photo = get_theme_mod('suc_home_photo_link');
     if ( $home_photo ) : ?>
-        <div class="home-featured-image" style="width: 100%; max-height: 500px; overflow: hidden;">
+        <div class="home-featured-image" style="width: 100%; max-height: 300; overflow: hidden;">
             <img src="<?php echo esc_url($home_photo); ?>" alt="Premium Cabinetry" style="width: 100%; height: auto; object-fit: cover;">
         </div>
     <?php else : ?>
-        <div class="home-featured-image placeholder" style="width: 100%; height: 300px; background-color: #e0e0e0; display: flex; align-items: center; justify-content: center; color: #777;">
+        <div class="home-featured-image placeholder" style="width: 100%; height: 300; background-color: #e0e0e0; display: flex; align-items: center; justify-content: center; color: #777;">
             <span>[Home Page Photo Placeholder - Set in Customizer]</span>
         </div>
     <?php endif; ?>

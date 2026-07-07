@@ -6,7 +6,7 @@ get_header();
     <div class="two-column-layout">
         <section class="about-us">
             <h1>About Southern Utah Cabinetry</h1>
-            <?php
+            <?php 
             $family_photo = get_theme_mod('suc_family_photo_link');
             if ( $family_photo ) : ?>
                 <div class="family-photo" style="margin-bottom: 20px;">
@@ -14,7 +14,7 @@ get_header();
                 </div>
             <?php endif; ?>
 
-            <?php
+            <?php 
             $family_desc = get_theme_mod('suc_family_description');
             if ( $family_desc ) : ?>
                 <div class="family-description" style="margin-bottom: 20px; font-style: italic; color: #555;">
