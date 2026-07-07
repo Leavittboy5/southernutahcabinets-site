@@ -26,6 +26,7 @@ function suc_create_invoices_table() {
         shipping_handling_cost float NOT NULL DEFAULT 0.00,
         payment_fee float NOT NULL DEFAULT 0.00,
         invoice_items longtext NOT NULL,
+        status varchar(20) DEFAULT 'estimate' NOT NULL,
         created_at datetime DEFAULT CURRENT_TIMESTAMP NOT NULL,
         PRIMARY KEY  (id)
     ) $charset_collate;";
@@ -56,7 +57,8 @@ function suc_handle_invoice_actions() {
             'tax_rate' => floatval($_POST['tax_rate']),
             'shipping_handling_cost' => floatval($_POST['shipping_handling_cost']),
             'payment_fee' => floatval($_POST['payment_fee']),
-            'invoice_items' => wp_strip_all_tags(wp_unslash($_POST['invoice_items']))
+            'invoice_items' => wp_strip_all_tags(wp_unslash($_POST['invoice_items'])),
+            'status' => isset($_POST['status']) ? sanitize_text_field($_POST['status']) : 'estimate'
         );
 
         if (!empty($_POST['invoice_id'])) {
@@ -101,6 +103,7 @@ function suc_invoices_page_handler() {
         $shipping_handling_cost = '0.00';
         $payment_fee = '0.00';
         $invoice_items = '[]';
+        $status = 'estimate';
 
         if ($is_edit) {
             $inv = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table_name WHERE id = %d", intval($_GET['id'])));
@@ -113,6 +116,7 @@ function suc_invoices_page_handler() {
                 $shipping_handling_cost = $inv->shipping_handling_cost;
                 $payment_fee = $inv->payment_fee;
                 $invoice_items = $inv->invoice_items;
+                $status = $inv->status;
                 echo '<h1 class="wp-heading-inline">Edit Invoice</h1>';
             }
         } else {
@@ -133,6 +137,16 @@ function suc_invoices_page_handler() {
             <input type="hidden" name="invoice_id" value="<?php echo esc_attr($inv_id); ?>">
             
             <table class="form-table">
+                <tr>
+                    <th scope="row"><label>Status</label></th>
+                    <td>
+                        <select name="status" style="width:100%;">
+                            <option value="estimate" <?php selected($status, 'estimate'); ?>>Estimate</option>
+                            <option value="ordered" <?php selected($status, 'ordered'); ?>>Ordered / Invoice</option>
+                            <option value="archived" <?php selected($status, 'archived'); ?>>Archived</option>
+                        </select>
+                    </td>
+                </tr>
                 <tr>
                     <th scope="row"><label>Invoice Title / Number</label></th>
                     <td><input type="text" name="title" required style="width:100%;" value="<?php echo esc_attr($title); ?>" placeholder="e.g. INV-1001"></td>
@@ -301,6 +315,8 @@ function suc_invoices_page_handler() {
     
     // SHOW LIST OF INVOICES
     else {
+        $current_tab = isset($_GET['tab']) ? sanitize_text_field($_GET['tab']) : 'active';
+
         echo '<h1 class="wp-heading-inline">Manage Invoices</h1>';
         echo '<a href="?page=suc_invoices&action=new" class="page-title-action">Add New Invoice</a>';
         echo '<hr class="wp-header-end">';
@@ -311,36 +327,125 @@ function suc_invoices_page_handler() {
             if ($_GET['msg'] == 'deleted') echo '<div class="notice notice-error is-dismissible"><p>Invoice Deleted.</p></div>';
         }
 
-        $invoices = $wpdb->get_results("SELECT * FROM $table_name ORDER BY id DESC");
+        echo '<h2 class="nav-tab-wrapper">';
+        echo '<a href="?page=suc_invoices&tab=active" class="nav-tab ' . ($current_tab == 'active' ? 'nav-tab-active' : '') . '">Active & Estimates</a>';
+        echo '<a href="?page=suc_invoices&tab=archived" class="nav-tab ' . ($current_tab == 'archived' ? 'nav-tab-active' : '') . '">Archived</a>';
+        echo '<a href="?page=suc_invoices&tab=reports" class="nav-tab ' . ($current_tab == 'reports' ? 'nav-tab-active' : '') . '">Reports</a>';
+        echo '</h2>';
 
-        echo '<table class="wp-list-table widefat fixed striped">';
-        echo '<thead><tr><th>Invoice Number / Title</th><th>PO Number</th><th>Date Created</th><th>Actions</th></tr></thead>';
-        echo '<tbody>';
-        if($invoices) {
-            foreach($invoices as $inv) {
-                $print_url = admin_url('admin.php?action=suc_print_invoice&id=' . $inv->id);
-                $edit_url = admin_url('admin.php?page=suc_invoices&action=edit&id=' . $inv->id);
-                $delete_url = admin_url('admin.php?page=suc_invoices&action=delete&id=' . $inv->id);
-                $date = date('F j, Y', strtotime($inv->created_at));
-                
-                // Fetch the PO number or display a dash if empty
-                $display_po = !empty($inv->po_number) ? esc_html($inv->po_number) : '-';
-                
-                echo "<tr>
-                    <td><strong>" . esc_html($inv->title) . "</strong></td>
-                    <td>{$display_po}</td>
-                    <td>{$date}</td>
-                    <td>
-                        <a href='{$edit_url}' class='button'>Edit</a>
-                        <a href='{$print_url}' target='_blank' class='button button-primary'>📄 View / PDF</a>
-                        <a href='{$delete_url}' class='button' style='color:#a00;' onclick='return confirm(\"Permanently delete this invoice?\");'>Delete</a>
-                    </td>
-                </tr>";
+        if ($current_tab == 'active' || $current_tab == 'archived') {
+            if ($current_tab == 'active') {
+                $invoices = $wpdb->get_results("SELECT * FROM $table_name WHERE status != 'archived' ORDER BY id DESC");
+            } else {
+                $invoices = $wpdb->get_results("SELECT * FROM $table_name WHERE status = 'archived' ORDER BY id DESC");
             }
-        } else {
-            echo '<tr><td colspan="4">No invoices found. Click "Add New Invoice" to get started.</td></tr>';
+
+            echo '<table class="wp-list-table widefat fixed striped" style="margin-top:20px;">';
+            echo '<thead><tr><th>Invoice Number / Title</th><th>PO Number</th><th>Date Created</th><th>Status</th><th>Actions</th></tr></thead>';
+            echo '<tbody>';
+            if($invoices) {
+                foreach($invoices as $inv) {
+                    $print_url = admin_url('admin.php?action=suc_print_invoice&id=' . $inv->id);
+                    $edit_url = admin_url('admin.php?page=suc_invoices&action=edit&id=' . $inv->id);
+                    $delete_url = admin_url('admin.php?page=suc_invoices&action=delete&id=' . $inv->id);
+                    $date = date('F j, Y', strtotime($inv->created_at));
+
+                    // Fetch the PO number or display a dash if empty
+                    $display_po = !empty($inv->po_number) ? esc_html($inv->po_number) : '-';
+                    $status_display = ucfirst($inv->status);
+                    if ($status_display == 'Ordered') {
+                        $status_badge = '<span style="background:#d4edda; color:#155724; padding:3px 8px; border-radius:12px; font-size:12px; font-weight:bold;">Ordered</span>';
+                    } elseif ($status_display == 'Estimate') {
+                        $status_badge = '<span style="background:#fff3cd; color:#856404; padding:3px 8px; border-radius:12px; font-size:12px; font-weight:bold;">Estimate</span>';
+                    } else {
+                        $status_badge = '<span style="background:#e2e3e5; color:#383d41; padding:3px 8px; border-radius:12px; font-size:12px; font-weight:bold;">Archived</span>';
+                    }
+
+                    echo "<tr>
+                        <td><strong>" . esc_html($inv->title) . "</strong></td>
+                        <td>{$display_po}</td>
+                        <td>{$date}</td>
+                        <td>{$status_badge}</td>
+                        <td>
+                            <a href='{$edit_url}' class='button'>Edit</a>
+                            <a href='{$print_url}' target='_blank' class='button button-primary'>📄 View / PDF</a>
+                            <a href='{$delete_url}' class='button' style='color:#a00;' onclick='return confirm(\"Permanently delete this invoice?\");'>Delete</a>
+                        </td>
+                    </tr>";
+                }
+            } else {
+                echo '<tr><td colspan="5">No invoices found.</td></tr>';
+            }
+            echo '</tbody></table>';
+        } elseif ($current_tab == 'reports') {
+            $start_date = isset($_GET['start_date']) ? sanitize_text_field($_GET['start_date']) : date('Y-m-01'); // Default to 1st of current month
+            $end_date = isset($_GET['end_date']) ? sanitize_text_field($_GET['end_date']) : date('Y-m-t'); // Default to last day of current month
+
+            echo '<form method="GET" action="" style="margin-top: 20px; background: #fff; padding: 15px; border: 1px solid #ccd0d4; display: inline-block; border-radius: 4px;">';
+            echo '<input type="hidden" name="page" value="suc_invoices">';
+            echo '<input type="hidden" name="tab" value="reports">';
+            echo '<label for="start_date"><strong>Start Date:</strong></label> ';
+            echo '<input type="date" id="start_date" name="start_date" value="' . esc_attr($start_date) . '"> &nbsp;&nbsp;';
+            echo '<label for="end_date"><strong>End Date:</strong></label> ';
+            echo '<input type="date" id="end_date" name="end_date" value="' . esc_attr($end_date) . '"> &nbsp;&nbsp;';
+            echo '<button type="submit" class="button button-primary">Filter Reports</button>';
+            echo '</form>';
+
+            // Query only 'ordered' invoices in the date range
+            $query = $wpdb->prepare(
+                "SELECT * FROM $table_name WHERE status = 'ordered' AND DATE(created_at) >= %s AND DATE(created_at) <= %s ORDER BY created_at ASC",
+                $start_date, $end_date
+            );
+            $report_invoices = $wpdb->get_results($query);
+
+            $total_taxable_subtotal = 0;
+            $total_tax_collected = 0;
+
+            if ($report_invoices) {
+                echo '<table class="wp-list-table widefat fixed striped" style="margin-top:20px;">';
+                echo '<thead><tr><th>Date</th><th>Invoice Title</th><th>Tax Rate</th><th>Taxable Amount (Subtotal)</th><th>Tax Collected</th><th>Actions</th></tr></thead>';
+                echo '<tbody>';
+                
+                foreach ($report_invoices as $inv) {
+                    $items = json_decode($inv->invoice_items, true) ?: array();
+                    $inv_subtotal = 0;
+
+                    foreach ($items as $item) {
+                        $qty = floatval(isset($item['qty']) ? $item['qty'] : 1);
+                        $base_price = floatval(isset($item['base_price']) ? $item['base_price'] : (isset($item['price']) ? $item['price'] : 0));
+                        $profit = floatval(isset($item['profit']) ? $item['profit'] : 0);
+                        $final_unit_price = $base_price + $profit;
+                        $inv_subtotal += ($qty * $final_unit_price);
+                    }
+
+                    $inv_tax = $inv_subtotal * ($inv->tax_rate / 100);
+
+                    $total_taxable_subtotal += $inv_subtotal;
+                    $total_tax_collected += $inv_tax;
+
+                    $date = date('F j, Y', strtotime($inv->created_at));
+                    $print_url = admin_url('admin.php?action=suc_print_invoice&id=' . $inv->id);
+
+                    echo "<tr>
+                        <td>{$date}</td>
+                        <td><strong>" . esc_html($inv->title) . "</strong></td>
+                        <td>" . esc_html($inv->tax_rate) . "%</td>
+                        <td>$" . number_format($inv_subtotal, 2) . "</td>
+                        <td>$" . number_format($inv_tax, 2) . "</td>
+                        <td><a href='{$print_url}' target='_blank' class='button button-small'>View PDF</a></td>
+                    </tr>";
+                }
+                echo '</tbody></table>';
+                
+                echo '<div style="margin-top:20px; background:#e2ecd3; border:1px solid #c3d6a8; padding:20px; border-radius:4px; max-width:600px;">';
+                echo '<h3>Period Totals (Ordered Invoices Only)</h3>';
+                echo '<p style="font-size:16px;"><strong>Total Taxable Items (Subtotal):</strong> $' . number_format($total_taxable_subtotal, 2) . '</p>';
+                echo '<p style="font-size:16px;"><strong>Total Tax Collected:</strong> $' . number_format($total_tax_collected, 2) . '</p>';
+                echo '</div>';
+            } else {
+                echo '<p style="margin-top:20px;">No "Ordered" invoices found in this date range.</p>';
+            }
         }
-        echo '</tbody></table>';
     }
     echo '</div>';
 }
@@ -356,13 +461,15 @@ function suc_print_invoice_action() {
 
     $items = json_decode($invoice->invoice_items, true) ?: array();
     $subtotal = 0;
+
+    $doc_type = ($invoice->status === 'estimate') ? 'ESTIMATE' : 'INVOICE';
     ?>
     <!DOCTYPE html>
     <html lang="en">
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Invoice - <?php echo esc_attr($invoice->title); ?></title>
+        <title><?php echo $doc_type; ?> - <?php echo esc_attr($invoice->title); ?></title>
         <style>
             :root { --primary-color: #2c3e50; --secondary-color: #d35400; --bg-light: #f9f9f9; --border-color: #dddddd; }
             body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #525659; margin: 0; padding: 40px 20px; color: #333; }
@@ -400,7 +507,7 @@ function suc_print_invoice_action() {
                     </div>
                 </div>
                 <div class="invoice-meta">
-                    <h1>INVOICE</h1>
+                    <h1><?php echo $doc_type; ?></h1>
                     <p style="margin:3px 0;"><strong>Title / #:</strong> <?php echo esc_html($invoice->title); ?></p>
                     <?php if (!empty($invoice->po_number)) : ?>
                         <p style="margin:3px 0;"><strong>PO #:</strong> <?php echo esc_html($invoice->po_number); ?></p>
