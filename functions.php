@@ -158,7 +158,7 @@ function suc_register_photo_gallery_cpt() {
 add_action('init', 'suc_register_photo_gallery_cpt', 0);
 
 /* ==========================================================================
-   CUSTOM INVOICE SYSTEM (OPTION 1: CUSTOM DATABASE TABLE)
+   CUSTOM INVOICE SYSTEM
    ========================================================================== */
 
 // 1. Create the Custom Database Table (Runs automatically)
@@ -167,14 +167,15 @@ function suc_create_invoices_table() {
     $table_name = $wpdb->prefix . 'suc_invoices';
     $charset_collate = $wpdb->get_charset_collate();
 
-    // Added po_number to the database schema
+    // Added payment_fee and changed shipping_cost to shipping_handling_cost
     $sql = "CREATE TABLE $table_name (
         id mediumint(9) NOT NULL AUTO_INCREMENT,
         title varchar(255) NOT NULL,
         po_number varchar(255) DEFAULT '' NOT NULL,
         client_info text NOT NULL,
         tax_rate float NOT NULL DEFAULT 6.75,
-        shipping_cost float NOT NULL DEFAULT 0.00,
+        shipping_handling_cost float NOT NULL DEFAULT 0.00,
+        payment_fee float NOT NULL DEFAULT 0.00,
         invoice_items longtext NOT NULL,
         created_at datetime DEFAULT CURRENT_TIMESTAMP NOT NULL,
         PRIMARY KEY  (id)
@@ -204,7 +205,8 @@ function suc_handle_invoice_actions() {
             'po_number' => sanitize_text_field($_POST['po_number']),
             'client_info' => sanitize_textarea_field($_POST['client_info']),
             'tax_rate' => floatval($_POST['tax_rate']),
-            'shipping_cost' => floatval($_POST['shipping_cost']),
+            'shipping_handling_cost' => floatval($_POST['shipping_handling_cost']),
+            'payment_fee' => floatval($_POST['payment_fee']),
             'invoice_items' => wp_strip_all_tags(wp_unslash($_POST['invoice_items']))
         );
 
@@ -247,7 +249,8 @@ function suc_invoices_page_handler() {
         $po_number = '';
         $client_info = '';
         $tax_rate = '6.75';
-        $shipping_cost = '0.00';
+        $shipping_handling_cost = '0.00';
+        $payment_fee = '0.00';
         $invoice_items = '[]';
 
         if ($is_edit) {
@@ -258,7 +261,8 @@ function suc_invoices_page_handler() {
                 $po_number = $inv->po_number;
                 $client_info = $inv->client_info;
                 $tax_rate = $inv->tax_rate;
-                $shipping_cost = $inv->shipping_cost;
+                $shipping_handling_cost = $inv->shipping_handling_cost;
+                $payment_fee = $inv->payment_fee;
                 $invoice_items = $inv->invoice_items;
                 echo '<h1 class="wp-heading-inline">Edit Invoice</h1>';
             }
@@ -297,8 +301,12 @@ function suc_invoices_page_handler() {
                     <td><input type="number" step="0.01" name="tax_rate" value="<?php echo esc_attr($tax_rate); ?>" style="width:100px;"></td>
                 </tr>
                 <tr>
-                    <th scope="row"><label>Shipping Cost ($)</label></th>
-                    <td><input type="number" step="0.01" name="shipping_cost" value="<?php echo esc_attr($shipping_cost); ?>" style="width:100px;"></td>
+                    <th scope="row"><label>Shipping & Handling ($)</label></th>
+                    <td><input type="number" step="0.01" name="shipping_handling_cost" value="<?php echo esc_attr($shipping_handling_cost); ?>" style="width:100px;"></td>
+                </tr>
+                <tr>
+                    <th scope="row"><label>Payment Processing Fee ($)</label></th>
+                    <td><input type="number" step="0.01" name="payment_fee" value="<?php echo esc_attr($payment_fee); ?>" style="width:100px;"></td>
                 </tr>
             </table>
 
@@ -318,7 +326,7 @@ function suc_invoices_page_handler() {
                         <th style="width:40%">Description</th>
                         <th style="width:10%">Qty</th>
                         <th style="width:15%">Base Cost ($)</th>
-                        <th style="width:15%">Profit ($)</th>
+                        <th style="width:15%">Profit/Upcharge ($)</th>
                         <th style="width:15%">Final Unit Price</th>
                         <th style="width:5%"></th>
                     </tr>
@@ -360,7 +368,7 @@ function suc_invoices_page_handler() {
                         <td><input type="number" class="i-qty" data-index="${index}" value="${item.qty}" min="1" style="width:100%"></td>
                         <td><input type="number" step="0.01" class="i-base" data-index="${index}" value="${item.base_price}" style="width:100%"></td>
                         <td><input type="number" step="0.01" class="i-profit" data-index="${index}" value="${item.profit}" style="width:100%"></td>
-                        <td style="vertical-align: middle; font-weight: bold; color: #2c3e50;">$${finalPrice}</td>
+                        <td style="vertical-align: middle; font-weight: bold; color: #2c3e50;" class="i-total">$${finalPrice}</td>
                         <td><a href="#" class="suc-remove-row" data-index="${index}" style="color:red; text-decoration:none; font-weight:bold;">&times;</a></td>
                     `;
                     tbody.appendChild(tr);
@@ -368,6 +376,7 @@ function suc_invoices_page_handler() {
                 hiddenInput.value = JSON.stringify(items);
             }
 
+            // Fix for backwards typing: Target DOM updates instead of a full render on every keystroke
             tbody.addEventListener('input', function(e) {
                 const index = e.target.getAttribute('data-index');
                 if(e.target.classList.contains('i-desc')) items[index].desc = e.target.value;
@@ -375,13 +384,16 @@ function suc_invoices_page_handler() {
                 if(e.target.classList.contains('i-base')) items[index].base_price = e.target.value;
                 if(e.target.classList.contains('i-profit')) items[index].profit = e.target.value;
                 
+                // Only update the specific total text for this row
                 if(e.target.classList.contains('i-base') || e.target.classList.contains('i-profit')) {
-                    renderRows();
-                    const inputs = tbody.querySelectorAll(`.${e.target.className}`);
-                    if(inputs[index]) inputs[index].focus();
-                } else {
-                    hiddenInput.value = JSON.stringify(items);
+                    const tr = e.target.closest('tr');
+                    const base = parseFloat(items[index].base_price) || 0;
+                    const profit = parseFloat(items[index].profit) || 0;
+                    const finalPrice = (base + profit).toFixed(2);
+                    tr.querySelector('.i-total').textContent = '$' + finalPrice;
                 }
+                
+                hiddenInput.value = JSON.stringify(items);
             });
 
             tbody.addEventListener('click', function(e) {
@@ -516,7 +528,7 @@ function suc_print_invoice_action() {
             .invoice-table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
             .invoice-table th, .invoice-table td { padding: 12px; border-bottom: 1px solid #eee; text-align: left; }
             .invoice-table th { background-color: var(--bg-light); color: var(--primary-color); }
-            .invoice-totals { width: 300px; float: right; }
+            .invoice-totals { width: 350px; float: right; }
             .totals-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #eee; }
             .grand-total { font-size: 1.2rem; font-weight: bold; color: var(--primary-color); border-top: 2px solid var(--primary-color); border-bottom: none; }
             @media print { body { background-color: #ffffff; padding: 0; } .invoice-container { box-shadow: none; padding: 0; max-width: 100%; } .no-print { display: none !important; } }
@@ -578,15 +590,16 @@ function suc_print_invoice_action() {
 
             <?php 
             $tax_amount = $subtotal * ($invoice->tax_rate / 100);
-            $grand_total = $subtotal + $tax_amount + $invoice->shipping_cost;
+            $combined_shipping_fee = $invoice->shipping_handling_cost + $invoice->payment_fee;
+            $grand_total = $subtotal + $tax_amount + $combined_shipping_fee;
             ?>
             <div class="invoice-totals">
                 <div class="totals-row"><label>Subtotal:</label><span>$<?php echo number_format($subtotal, 2); ?></span></div>
                 <?php if ($invoice->tax_rate > 0) : ?>
                 <div class="totals-row"><label>Tax (<?php echo esc_html($invoice->tax_rate); ?>%):</label><span>$<?php echo number_format($tax_amount, 2); ?></span></div>
                 <?php endif; ?>
-                <?php if ($invoice->shipping_cost > 0) : ?>
-                <div class="totals-row"><label>Shipping:</label><span>$<?php echo number_format($invoice->shipping_cost, 2); ?></span></div>
+                <?php if ($combined_shipping_fee > 0) : ?>
+                <div class="totals-row"><label>Shipping & Handling:</label><span>$<?php echo number_format($combined_shipping_fee, 2); ?></span></div>
                 <?php endif; ?>
                 <div class="totals-row grand-total"><label>Grand Total:</label><span>$<?php echo number_format($grand_total, 2); ?></span></div>
             </div>
