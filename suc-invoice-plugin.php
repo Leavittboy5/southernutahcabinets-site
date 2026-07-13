@@ -327,21 +327,27 @@ function suc_invoices_page_handler() {
             if ($_GET['msg'] == 'deleted') echo '<div class="notice notice-error is-dismissible"><p>Invoice Deleted.</p></div>';
         }
 
+        // Update default tab based on separation
+        if ($current_tab == 'active') $current_tab = 'estimates';
+
         echo '<h2 class="nav-tab-wrapper">';
-        echo '<a href="?page=suc_invoices&tab=active" class="nav-tab ' . ($current_tab == 'active' ? 'nav-tab-active' : '') . '">Active & Estimates</a>';
+        echo '<a href="?page=suc_invoices&tab=estimates" class="nav-tab ' . ($current_tab == 'estimates' ? 'nav-tab-active' : '') . '">Estimates</a>';
+        echo '<a href="?page=suc_invoices&tab=invoices" class="nav-tab ' . ($current_tab == 'invoices' ? 'nav-tab-active' : '') . '">Invoices</a>';
         echo '<a href="?page=suc_invoices&tab=archived" class="nav-tab ' . ($current_tab == 'archived' ? 'nav-tab-active' : '') . '">Archived</a>';
         echo '<a href="?page=suc_invoices&tab=reports" class="nav-tab ' . ($current_tab == 'reports' ? 'nav-tab-active' : '') . '">Reports</a>';
         echo '</h2>';
 
-        if ($current_tab == 'active' || $current_tab == 'archived') {
-            if ($current_tab == 'active') {
-                $invoices = $wpdb->get_results("SELECT * FROM $table_name WHERE status != 'archived' ORDER BY id DESC");
+        if ($current_tab == 'estimates' || $current_tab == 'invoices' || $current_tab == 'archived') {
+            if ($current_tab == 'estimates') {
+                $invoices = $wpdb->get_results("SELECT * FROM $table_name WHERE status = 'estimate' ORDER BY id DESC");
+            } elseif ($current_tab == 'invoices') {
+                $invoices = $wpdb->get_results("SELECT * FROM $table_name WHERE status = 'ordered' ORDER BY id DESC");
             } else {
                 $invoices = $wpdb->get_results("SELECT * FROM $table_name WHERE status = 'archived' ORDER BY id DESC");
             }
 
             echo '<table class="wp-list-table widefat fixed striped" style="margin-top:20px;">';
-            echo '<thead><tr><th>Invoice Number / Title</th><th>PO Number</th><th>Date Created</th><th>Status</th><th>Actions</th></tr></thead>';
+            echo '<thead><tr><th>Invoice Number / Title</th><th>PO Number</th><th>Date Created</th><th>Profit</th><th>Status</th><th>Actions</th></tr></thead>';
             echo '<tbody>';
             if($invoices) {
                 foreach($invoices as $inv) {
@@ -361,10 +367,20 @@ function suc_invoices_page_handler() {
                         $status_badge = '<span style="background:#e2e3e5; color:#383d41; padding:3px 8px; border-radius:12px; font-size:12px; font-weight:bold;">Archived</span>';
                     }
 
+                    // Calculate profit
+                    $items = json_decode($inv->invoice_items, true) ?: array();
+                    $total_profit = 0;
+                    foreach ($items as $item) {
+                        $qty = floatval(isset($item['qty']) ? $item['qty'] : 1);
+                        $profit = floatval(isset($item['profit']) ? $item['profit'] : 0);
+                        $total_profit += ($qty * $profit);
+                    }
+
                     echo "<tr>
                         <td><strong>" . esc_html($inv->title) . "</strong></td>
                         <td>{$display_po}</td>
                         <td>{$date}</td>
+                        <td>$" . number_format($total_profit, 2) . "</td>
                         <td>{$status_badge}</td>
                         <td>
                             <a href='{$edit_url}' class='button'>Edit</a>
@@ -374,7 +390,7 @@ function suc_invoices_page_handler() {
                     </tr>";
                 }
             } else {
-                echo '<tr><td colspan="5">No invoices found.</td></tr>';
+                echo '<tr><td colspan="6">No invoices found.</td></tr>';
             }
             echo '</tbody></table>';
         } elseif ($current_tab == 'reports') {
@@ -400,28 +416,33 @@ function suc_invoices_page_handler() {
 
             $total_taxable_subtotal = 0;
             $total_tax_collected = 0;
+            $total_period_profit = 0;
 
             if ($report_invoices) {
                 echo '<table class="wp-list-table widefat fixed striped" style="margin-top:20px;">';
-                echo '<thead><tr><th>Date</th><th>Invoice Title</th><th>Tax Rate</th><th>Taxable Amount (Subtotal)</th><th>Tax Collected</th><th>Actions</th></tr></thead>';
+                echo '<thead><tr><th>Date</th><th>Invoice Title</th><th>Tax Rate</th><th>Taxable Amount (Subtotal)</th><th>Tax Collected</th><th>Profit</th><th>Actions</th></tr></thead>';
                 echo '<tbody>';
                 
                 foreach ($report_invoices as $inv) {
                     $items = json_decode($inv->invoice_items, true) ?: array();
                     $inv_subtotal = 0;
+                    $inv_profit = 0;
 
                     foreach ($items as $item) {
                         $qty = floatval(isset($item['qty']) ? $item['qty'] : 1);
                         $base_price = floatval(isset($item['base_price']) ? $item['base_price'] : (isset($item['price']) ? $item['price'] : 0));
                         $profit = floatval(isset($item['profit']) ? $item['profit'] : 0);
                         $final_unit_price = $base_price + $profit;
+
                         $inv_subtotal += ($qty * $final_unit_price);
+                        $inv_profit += ($qty * $profit);
                     }
 
                     $inv_tax = $inv_subtotal * ($inv->tax_rate / 100);
 
                     $total_taxable_subtotal += $inv_subtotal;
                     $total_tax_collected += $inv_tax;
+                    $total_period_profit += $inv_profit;
 
                     $date = date('F j, Y', strtotime($inv->created_at));
                     $print_url = admin_url('admin.php?action=suc_print_invoice&id=' . $inv->id);
@@ -432,6 +453,7 @@ function suc_invoices_page_handler() {
                         <td>" . esc_html($inv->tax_rate) . "%</td>
                         <td>$" . number_format($inv_subtotal, 2) . "</td>
                         <td>$" . number_format($inv_tax, 2) . "</td>
+                        <td>$" . number_format($inv_profit, 2) . "</td>
                         <td><a href='{$print_url}' target='_blank' class='button button-small'>View PDF</a></td>
                     </tr>";
                 }
@@ -441,6 +463,7 @@ function suc_invoices_page_handler() {
                 echo '<h3>Period Totals (Ordered Invoices Only)</h3>';
                 echo '<p style="font-size:16px;"><strong>Total Taxable Items (Subtotal):</strong> $' . number_format($total_taxable_subtotal, 2) . '</p>';
                 echo '<p style="font-size:16px;"><strong>Total Tax Collected:</strong> $' . number_format($total_tax_collected, 2) . '</p>';
+                echo '<p style="font-size:16px; color:#155724;"><strong>Total Profit:</strong> $' . number_format($total_period_profit, 2) . '</p>';
                 echo '</div>';
             } else {
                 echo '<p style="margin-top:20px;">No "Ordered" invoices found in this date range.</p>';
